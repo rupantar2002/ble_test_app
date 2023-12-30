@@ -1,1 +1,6 @@
-# ble_test_app
+
+----------
+
+# This repository use to test android bluetooth api usage
+
+----------
