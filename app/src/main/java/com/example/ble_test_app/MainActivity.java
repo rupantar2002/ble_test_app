@@ -12,6 +12,9 @@ import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanResult;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -51,12 +54,46 @@ public class MainActivity extends AppCompatActivity {
 
     private BluetoothAdapter gBluetoothAdapter = null;
 
+    private BluetoothLeScanner gBleScanner = null;
+
+    private boolean gScanningFlag = false;
+    private final ScanCallback gBleScanCallback = new ScanCallback() {
+        @SuppressLint("MissingPermission")
+        @Override
+        public void onScanResult(int callbackType, ScanResult result) {
+            super.onScanResult(callbackType, result);
+            Log.d(TAG, "onScanResult: Ble scan result ,callbackType : " + callbackType);
+
+            BluetoothDevice device = result.getDevice();
+
+            /**
+             * Log and toast available ble devices.
+             */
+            if(IsPermissionGranted(MainActivity.this,Manifest.permission.BLUETOOTH_CONNECT)){
+                String responceStr="{name : \"" + device.getName() +"\" address : "+ device.getAddress()+" }";
+                Log.d(TAG, "onScanResult: Ble Device Found "+responceStr);
+//                Toast.makeText(MainActivity.this,responceStr,Toast.LENGTH_SHORT).show();
+            }else{
+                Log.e(TAG, "onScanResult: permission not available : "+ Manifest.permission.BLUETOOTH_CONNECT);
+            }
+
+
+        }
+
+        @Override
+        public void onScanFailed(int errorCode) {
+            super.onScanFailed(errorCode);
+            Log.e(TAG, "onScanFailed: Ble scanning failed , errorCode: " + errorCode);
+        }
+    };
+
     /*-------UI Elements----*/
     private Button gStartButton = null;
     private Button gScanButton = null;
-    private Button gDiscoveryButton = null;
+    private Button gConnectionButton = null;
 
     /*---------------------*/
+
 
     private final BroadcastReceiver gStateChangeReceiver = new BroadcastReceiver() {
         @Override
@@ -91,68 +128,8 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    private final BroadcastReceiver gScanModeChangeReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            final String action = intent.getAction();
-            if (action.equals(BluetoothAdapter.ACTION_SCAN_MODE_CHANGED)) {
 
-                final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_SCAN_MODE, BluetoothAdapter.ERROR);
-                switch (state) {
-                    case BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE: {
-                        Log.d(TAG, "onReceive: action: " + action + " state : BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE");
-                        break;
-                    }
-                    case BluetoothAdapter.SCAN_MODE_CONNECTABLE: {
-                        Log.d(TAG, "onReceive: action: " + action + " state : BluetoothAdapter.SCAN_MODE_CONNECTABLE");
-                        break;
-                    }
-                    case BluetoothAdapter.STATE_CONNECTING: {
-                        Log.d(TAG, "onReceive: action: " + action + " state : BluetoothAdapter.STATE_CONNECTING");
-                        break;
-                    }
-                    case BluetoothAdapter.STATE_CONNECTED: {
-                        Log.d(TAG, "onReceive: action: " + action + " state : BluetoothAdapter.STATE_CONNECTED");
-                        break;
-                    }
-                    case BluetoothAdapter.STATE_DISCONNECTING: {
-                        Log.d(TAG, "onReceive: action: " + action + " state : BluetoothAdapter.STATE_DISCONNECTING");
-                        break;
-                    }
-                    case BluetoothAdapter.STATE_DISCONNECTED: {
-                        Log.d(TAG, "onReceive: action: " + action + " state : BluetoothAdapter.STATE_DISCONNECTED");
-                        break;
-                    }
-                    case BluetoothAdapter.SCAN_MODE_NONE: {
-                        Log.d(TAG, "onReceive: action: " + action + " state : BluetoothAdapter.SCAN_MODE_NONE");
-                        break;
-                    }
-                    default: {
-                        // do nothing
-                        break;
-                    }
-                }
-            }
-        }
-    };
 
-    private final BroadcastReceiver gDeviceFoundReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            final String action = intent.getAction();
-            if (action.equals(BluetoothDevice.ACTION_FOUND)) {
-                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                // TODO do something after getting device data
-
-                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                    Log.e(TAG, "onReceive: permission not  granted i.e" + Manifest.permission.BLUETOOTH_CONNECT);
-                    return;
-                }
-                Log.d(TAG, "onReceive: Device Found { device_name : " + device.getName() + " MAC : " + device.getAddress() + " }");
-                Toast.makeText(MainActivity.this,"{Device Found : device_name : " + device.getName() + " MAC : " + device.getAddress() + " }",Toast.LENGTH_SHORT).show();
-            }
-        }
-    };
 
     private boolean IsFeatureAvailable(final String featureSTring) {
 
@@ -291,7 +268,7 @@ public class MainActivity extends AppCompatActivity {
         Intent enableBtDiscoveryIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
         enableBtDiscoveryIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300);
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) {
-            Log.e(TAG, "EnableDisableBluetoothDiscovery: Permission not granted "+ Manifest.permission.BLUETOOTH_ADVERTISE);
+            Log.e(TAG, "EnableDisableBluetoothDiscovery: Permission not granted " + Manifest.permission.BLUETOOTH_ADVERTISE);
             Toast.makeText(activity, "Enable advertise permission", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -301,38 +278,26 @@ public class MainActivity extends AppCompatActivity {
         registerReceiver(receiver, enableBtIntentFilter);
     }
 
-    private void DiscoverDevices(final Activity activity, final BluetoothAdapter adapter, final BroadcastReceiver receiver) {
+    @SuppressLint("MissingPermission")
+    private void StartStopBleScanning() {
 
-        if (adapter.isEnabled() == false) {
-            Log.e(TAG, "DiscoverDevices: Bluetooth is disabled");
-            Toast.makeText(activity, "Please enable bluetooth", Toast.LENGTH_SHORT).show();
-            return;
+        if(!IsPermissionGranted(this, Manifest.permission.BLUETOOTH_SCAN)){
+            Log.e(TAG, "onCreate: Permission not granted: "+ Manifest.permission.BLUETOOTH_SCAN);
+            Toast.makeText(MainActivity.this ,"required bluetooth scan permission",Toast.LENGTH_SHORT).show();
         }
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
-            Log.e(TAG, "DiscoverDevices: Permission not granted "+Manifest.permission.BLUETOOTH_SCAN);
-            Toast.makeText(activity, "Enable Scanning permission", Toast.LENGTH_SHORT).show();
-            return;
+        if (gScanningFlag) {
+            gScanningFlag = false;
+            gBleScanner.stopScan(gBleScanCallback);
+            Log.d(TAG, "StartStopBleScanning: Stop Scanning");
+            Toast.makeText(MainActivity.this,"Stop",Toast.LENGTH_SHORT).show();
+
+        } else {
+            gScanningFlag = true;
+            gBleScanner.startScan(gBleScanCallback);
+            Log.d(TAG, "StartStopBleScanning: Start Scanning");
+            Toast.makeText(MainActivity.this,"Start",Toast.LENGTH_SHORT).show();
         }
-
-        if (adapter.isDiscovering() == true) {
-            // TODO check for exceptions
-            adapter.cancelDiscovery();
-            adapter.startDiscovery();
-            IntentFilter startDiscoveryFilter=new IntentFilter(BluetoothDevice.ACTION_FOUND);
-            registerReceiver(gDeviceFoundReceiver,startDiscoveryFilter);
-            Log.d(TAG, "DiscoverDevices: start discovery 1");
-
-
-        }else{
-            // TODO check for exceptions
-            adapter.startDiscovery();
-            IntentFilter startDiscoveryFilter=new IntentFilter(BluetoothDevice.ACTION_FOUND);
-            registerReceiver(gDeviceFoundReceiver,startDiscoveryFilter);
-            Log.d(TAG, "DiscoverDevices: start discovery 2");
-        }
-
-        Log.d(TAG, "DiscoverDevices: Looking for devices");
     }
 
     @Override
@@ -344,51 +309,62 @@ public class MainActivity extends AppCompatActivity {
         /*------------Reference ui elements--------------*/
         gStartButton = (Button) findViewById(R.id.button_start);
         gScanButton = (Button) findViewById(R.id.button_scan);
-        gDiscoveryButton = (Button) findViewById(R.id.button_discover);
+        gConnectionButton = (Button) findViewById(R.id.button_discover);
         /*-----------------------------------------------*/
 
         /**
          * Check weather bluetooth feature is available.
          */
-        IsFeatureAvailable(PackageManager.FEATURE_BLUETOOTH);
+        if (!IsFeatureAvailable(PackageManager.FEATURE_BLUETOOTH)) {
+            Toast.makeText(MainActivity.this, "Bluetooth feature not available", Toast.LENGTH_SHORT).show();
+            finish();
+        }
 
         /**
          * Check weather bluetooth low energy feature is available.
          */
-        IsFeatureAvailable(PackageManager.FEATURE_BLUETOOTH_LE);
+        if (!IsFeatureAvailable(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            Toast.makeText(MainActivity.this, "Bluetooth Low Energy feature not available", Toast.LENGTH_SHORT).show();
+            finish();
+        }
 
         RequestPermission(MainActivity.this,
                 Manifest.permission.BLUETOOTH_CONNECT,
                 AppPermissionRequestCodes.APP_PERMISSION_REQUEST_CODE_BLUETOOTH_CONNECT.ordinal(),
                 Manifest.permission.BLUETOOTH_CONNECT,
                 "required for this and that");
-
-        RequestPermission(MainActivity.this,
-                Manifest.permission.BLUETOOTH_ADVERTISE,
-                AppPermissionRequestCodes.APP_PERMISSION_REQUEST_CODE_BLUETOOTH_ADVERTISE.ordinal(),
-                Manifest.permission.BLUETOOTH_ADVERTISE,
-                "required for this and that");
-
-
+//
+//        RequestPermission(MainActivity.this,
+//                Manifest.permission.BLUETOOTH_ADVERTISE,
+//                AppPermissionRequestCodes.APP_PERMISSION_REQUEST_CODE_BLUETOOTH_ADVERTISE.ordinal(),
+//                Manifest.permission.BLUETOOTH_ADVERTISE,
+//                "required for this and that");
 
 
         /**
          * Request bluetooth permission.
          */
-//        RequestPermission(MainActivity.this,
-//                Manifest.permission.ACCESS_FINE_LOCATION,
-//                AppPermissionRequestCodes.APP_PERMISSION_REQUEST_CODE_FINE_LOCATION.ordinal(),
-//                Manifest.permission.ACCESS_FINE_LOCATION,
-//                "required for this and that");
+        RequestPermission(MainActivity.this,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                AppPermissionRequestCodes.APP_PERMISSION_REQUEST_CODE_COURSE_LOCATION.ordinal(),
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                "required for this and that");
+        RequestPermission(MainActivity.this,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                AppPermissionRequestCodes.APP_PERMISSION_REQUEST_CODE_FINE_LOCATION.ordinal(),
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                "required for this and that");
 
         gBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        Log.d(TAG, "onCreate: Bluetooth MAC : " + gBluetoothAdapter.getAddress());
 
+        gBleScanner = gBluetoothAdapter.getBluetoothLeScanner();
 
         gStartButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 Log.d(TAG, "onClick: Start button pressed");
-                EnableDisableBluetooth(MainActivity.this,gBluetoothAdapter,gStateChangeReceiver);
+                EnableDisableBluetooth(MainActivity.this, gBluetoothAdapter, gStateChangeReceiver);
             }
         });
 
@@ -396,29 +372,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 Log.d(TAG, "onClick: Scan button pressed");
-                EnableDisableBluetoothDiscovery(MainActivity.this,gBluetoothAdapter,gScanModeChangeReceiver);
+                StartStopBleScanning();
             }
         });
 
-        gDiscoveryButton.setOnClickListener(new View.OnClickListener() {
+        gConnectionButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 Log.d(TAG, "onClick: Discovery button pressed");
-
-                RequestPermission(MainActivity.this,
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        AppPermissionRequestCodes.APP_PERMISSION_REQUEST_CODE_FINE_LOCATION.ordinal(),
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        "required for this and that");
-
-                RequestPermission(MainActivity.this,
-                        Manifest.permission.ACCESS_BACKGROUND_LOCATION,
-                        AppPermissionRequestCodes.APP_PERMISSION_REQUEST_CODE_BACKGROUND_LOCATION.ordinal(),
-                        Manifest.permission.ACCESS_BACKGROUND_LOCATION,
-                        "required for this and that");
-
-                DiscoverDevices(MainActivity.this,gBluetoothAdapter,gDeviceFoundReceiver);
-
             }
         });
 
@@ -429,8 +390,6 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "onDestroy: Called");
         super.onDestroy();
         unregisterReceiver(gStateChangeReceiver);
-        unregisterReceiver(gScanModeChangeReceiver);
-        unregisterReceiver(gDeviceFoundReceiver);
     }
 
     @SuppressLint("MissingSuperCall")
