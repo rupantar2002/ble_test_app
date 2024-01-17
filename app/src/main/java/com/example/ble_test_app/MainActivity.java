@@ -147,15 +147,15 @@ public class MainActivity extends AppCompatActivity {
                 String responceStr="{name : \"" + device.getName() +"\" address : "+ device.getAddress()+" }";
                 Log.d(TAG, "onScanResult: Ble Device Found "+responceStr);
 
-                if(device.getName().equals(DeviceName) && device.getAddress().equals(DeviceMAc)){
-                    Log.d(TAG, "onScanResult: Required device available");
-                    StartStopBleScanning();
+                // if(device.getName().equals(DeviceName) && device.getAddress().equals(DeviceMAc)){
+                //     Log.d(TAG, "onScanResult: Required device available");
+                //     StartStopBleScanning();
 
-                    BluetoothGatt server=device.connectGatt(MainActivity.this,false,mBleGattCallback);
+                //     BluetoothGatt server=device.connectGatt(MainActivity.this,false,mBleGattCallback);
                 }
 
-//                mDeviceItemList.add(new BleDeviceItem(device.getName(),device.getAddress()));
-//                mRecyclerViewAdapter.notifyDataSetChanged();
+               mDeviceItemList.add(new BleDeviceItem(device.getName(),device.getAddress()));
+               mRecyclerViewAdapter.notifyDataSetChanged();
             }else{
                 Log.e(TAG, "onScanResult: permission not available : "+ Manifest.permission.BLUETOOTH_CONNECT);
             }
@@ -401,6 +401,12 @@ public class MainActivity extends AppCompatActivity {
                 Manifest.permission.BLUETOOTH_CONNECT,
                 AppPermissionRequestCodes.APP_PERMISSION_REQUEST_CODE_BLUETOOTH_CONNECT.ordinal(),
                 Manifest.permission.BLUETOOTH_CONNECT,
+                "required for this and that");
+
+        RequestPermission(MainActivity.this,
+                Manifest.permission.BLUETOOTH_SCAN,
+                AppPermissionRequestCodes.APP_PERMISSION_REQUEST_CODE_BLUETOOTH_SCAN.ordinal(),
+                Manifest.permission.BLUETOOTH_SCAN,
                 "required for this and that");
 
         RequestPermission(MainActivity.this,
